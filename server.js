@@ -25,7 +25,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ---------- VAPID (from env) ----------
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:teranxd11@gmail.com';
 
 if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
   console.error('FATAL: VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be set in environment.');
