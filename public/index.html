@@ -292,247 +292,310 @@
   </div>
 
   <script>
-    /* ------------------ Small util helpers ------------------ */
-    function openUrlSafe(url){
-      const a = document.createElement('a');
-      a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
-      document.body.appendChild(a); a.click(); a.remove();
+/* ------------------ Small util helpers (kept self-contained) ------------------ */
+function openUrlSafe(url){
+  const a = document.createElement('a');
+  a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function openWhatsApp(message){
+  const phone = '254717028877';
+  const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  openUrlSafe(url);
+}
+function openSignal(){
+  const phone = '+254717028877';
+  const url = `https://signal.me/#p/${phone}`;
+  openUrlSafe(url);
+}
+function showToast(msg, ms = 4200){
+  const t = document.getElementById('toast');
+  if(!t) return;
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(()=>{ t.style.display = 'none'; }, ms);
+}
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/\-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+/* ------------------ Countdown UI (timezone-safe) ------------------ */
+(function countdownInit(){
+  const d=document.getElementById('d'), h=document.getElementById('h'), m=document.getElementById('m'), s=document.getElementById('s');
+  // Explicit timezone for Nairobi (UTC+3) to avoid parsing differences across browsers
+  const launchIso = '2025-09-13T00:00:00+03:00';
+  const launch = new Date(launchIso);
+
+  function pad(n){ return String(n).padStart(2,'0'); }
+
+  function tick(){
+    const now = new Date();
+    let diff = launch.getTime() - now.getTime();
+    if(diff <= 0){
+      d.textContent=h.textContent=m.textContent=s.textContent='00';
+      return;
     }
-    function openWhatsApp(message){
-      const phone = '254717028877';
-      const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-      openUrlSafe(url);
+    const days = Math.floor(diff / (1000*60*60*24));
+    diff %= (1000*60*60*24);
+    const hours = Math.floor(diff / (1000*60*60));
+    diff %= (1000*60*60);
+    const mins = Math.floor(diff / (1000*60));
+    diff %= (1000*60);
+    const secs = Math.floor(diff / 1000);
+
+    d.textContent = pad(days);
+    h.textContent = pad(hours);
+    m.textContent = pad(mins);
+    s.textContent = pad(secs);
+  }
+  tick(); setInterval(tick,1000);
+})();
+
+/* ------------------ Service Worker + Push Subscription (robust) ------------------ */
+let swReg = null;
+let isSubscribed = false;
+
+async function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) {
+    console.warn('No Service Worker support');
+    return;
+  }
+  // Attempt sensible file names in order; your server can map /sw.js -> /service-worker.js if you prefer
+  const candidates = ['/service-worker.js', '/sw.js'];
+  for(const path of candidates){
+    try{
+      swReg = await navigator.serviceWorker.register(path);
+      console.log('Service Worker registered at', path, swReg);
+      const sub = await swReg.pushManager.getSubscription();
+      isSubscribed = !!sub;
+      updateSubBadge(isSubscribed);
+      return swReg;
+    } catch(err){
+      console.warn('SW register failed for', path, err);
+      // try next candidate
     }
-    function openSignal(){
-      const phone = '+254717028877';
-      const url = `https://signal.me/#p/${phone}`;
-      openUrlSafe(url);
-    }
-    function showToast(msg, ms = 4200){
-      const t = document.getElementById('toast');
-      if(!t) return;
-      t.textContent = msg; t.style.display = 'block';
-      clearTimeout(window._toastTimer);
-      window._toastTimer = setTimeout(()=>{ t.style.display = 'none'; }, ms);
-    }
-    function urlBase64ToUint8Array(base64String) {
-      const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-      const base64 = (base64String + padding).replace(/\-/g, "+").replace(/_/g, "/");
-      const rawData = window.atob(base64);
-      return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
-    }
+  }
+  console.error('Service Worker registration failed for all candidates.');
+}
 
-    /* ------------------ Countdown UI ------------------ */
-    (function countdownInit(){
-      const d=document.getElementById('d'), h=document.getElementById('h'), m=document.getElementById('m'), s=document.getElementById('s');
-      const launch = new Date('2025-09-13T00:00:00');
-      function tick(){
-        const now = new Date();
-        let diff = launch - now;
-        if(diff <= 0){ d.textContent=h.textContent=m.textContent=s.textContent='00'; return; }
-        const days = Math.floor(diff/(1000*60*60*24)); diff%= (1000*60*60*24);
-        const hours= Math.floor(diff/(1000*60*60)); diff%= (1000*60*60);
-        const mins = Math.floor(diff/(1000*60)); diff%= (1000*60);
-        const secs = Math.floor(diff/1000);
-        d.textContent = String(days).padStart(2,'0');
-        h.textContent = String(hours).padStart(2,'0');
-        m.textContent = String(mins).padStart(2,'0');
-        s.textContent = String(secs).padStart(2,'0');
-      }
-      tick(); setInterval(tick,1000);
-    })();
+function updateSubBadge(flag){
+  const b = document.getElementById('subBadge');
+  if(!b) return;
+  b.style.display = flag ? 'inline-block' : 'none';
+}
 
-    /* ------------------ Service Worker + Push Subscription ------------------ */
-    let swReg = null;
-    let isSubscribed = false;
+/** Fetch VAPID public key - supports raw text or JSON { publicKey } */
+async function fetchVapidPublicKey(){
+  const resp = await fetch('/api/vapidPublicKey');
+  if(!resp.ok) throw new Error('Failed to fetch VAPID key');
+  const ct = (resp.headers.get('content-type') || '');
+  if(ct.includes('application/json')){
+    const j = await resp.json();
+    return (j.publicKey || j.vapidPublicKey || j.key || '').trim();
+  } else {
+    return (await resp.text()).trim();
+  }
+}
 
-    async function registerServiceWorker() {
-      if (!('serviceWorker' in navigator)) {
-        console.warn('No Service Worker support');
-        return;
-      }
-      try {
-        // Register at /sw.js (server maps /sw.js -> public/service-worker.js)
-        swReg = await navigator.serviceWorker.register('/sw.js');
-        console.log('Service Worker registered', swReg);
-        // Check subscription state
-        const sub = await swReg.pushManager.getSubscription();
-        isSubscribed = !!sub;
-        updateSubBadge(isSubscribed);
-      } catch (err) {
-        console.error('SW register failed', err);
-      }
-    }
+async function subscribeForHelalink() {
+  if (!('serviceWorker' in navigator)) throw new Error('ServiceWorker not supported');
+  if (!('PushManager' in window)) throw new Error('Push not supported');
 
-    function updateSubBadge(flag){
-      const b = document.getElementById('subBadge');
-      if(!b) return;
-      b.style.display = flag ? 'inline-block' : 'none';
-    }
+  // ensure SW registered
+  if(!swReg) await registerServiceWorker();
+  if(!swReg) throw new Error('Service Worker not available');
 
-    async function subscribeForHelalink() {
-      if (!('serviceWorker' in navigator)) throw new Error('ServiceWorker not supported');
-      if (!('PushManager' in window)) throw new Error('Push not supported');
+  // Permission; bail out early if denied
+  if(Notification.permission === 'denied') throw new Error('Notification permission was previously denied');
+  if(Notification.permission !== 'granted'){
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') throw new Error('Notification permission denied');
+  }
 
-      // ensure SW registered
-      if(!swReg) swReg = await navigator.serviceWorker.register('/sw.js');
+  // Get VAPID public key
+  const vapidPublicKey = await fetchVapidPublicKey();
+  if(!vapidPublicKey) throw new Error('VAPID public key missing from server');
 
-      // Permission
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') throw new Error('Notification permission denied');
+  const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
 
-      // Fetch VAPID key (text)
-      const resp = await fetch('/api/vapidPublicKey');
-      if (!resp.ok) throw new Error('Failed to fetch VAPID public key');
-      const vapidPublicKey = (await resp.text()).trim();
-      const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
+  // subscribe
+  const subscription = await swReg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey
+  });
 
-      // subscribe
-      const subscription = await swReg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey
-      });
+  // Send serializable payload to server (use subscription.toJSON())
+  const launchIso = '2025-09-13T00:00:00+03:00';
+  const dailyTimes = ['09:00','13:00','19:00'];
+  const payload = {
+    subscription: subscription.toJSON ? subscription.toJSON() : subscription,
+    launchIso,
+    dailyTimes,
+    timezone: 'Africa/Nairobi',
+    meta: { source: 'site' }
+  };
 
-      // build payload for server (matches /api/subscribe expected shape)
-      const launchIso = '2025-09-13T00:00:00';
-      const dailyTimes = ['09:00','13:00','19:00'];
-      const payload = { subscription, launchIso, dailyTimes, timezone: 'Africa/Nairobi', meta: { source: 'site' } };
+  const r = await fetch('/api/subscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if(!r.ok){
+    const txt = await r.text().catch(()=> 'server error');
+    // if server responded with 409 (already exists) you might still want to mark subscribed
+    throw new Error('Server subscribe failed: ' + txt);
+  }
+  const json = await r.json().catch(()=> ({}));
+  console.log('Subscribed on server', json);
+  localStorage.setItem('helalink_sub_id', json.id || '');
+  isSubscribed = true;
+  updateSubBadge(true);
+  return json;
+}
 
-      const r = await fetch('/api/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!r.ok) {
-        const txt = await r.text();
-        throw new Error('Server subscribe failed: ' + txt);
-      }
-      const json = await r.json();
-      console.log('Subscribed on server', json);
-      localStorage.setItem('helalink_sub_id', json.id || '');
-      isSubscribed = true;
-      updateSubBadge(true);
-      return json;
-    }
-
-    async function unsubscribeForHelalink() {
-      if (!swReg) return;
-      const existing = await swReg.pushManager.getSubscription();
-      if (!existing) {
-        isSubscribed = false; updateSubBadge(false); return;
-      }
-      try {
-        await existing.unsubscribe();
-      } catch(e){ console.warn('Error during unsubscribe:', e); }
-      // tell server
-      await fetch('/api/unsubscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint: existing.endpoint, id: localStorage.getItem('helalink_sub_id') || undefined })
-      });
-      isSubscribed = false;
-      updateSubBadge(false);
-      showToast('Unsubscribed from browser reminders.');
-    }
-
-    // Hook buttons
-    document.addEventListener('DOMContentLoaded', async () => {
-      // register SW early
-      registerServiceWorker();
-
-      // typing
-      const typingEl = document.getElementById('typingText');
-      const fullText = 'HELALINK — coming soon';
-      let idx = 0; const speed = 85;
-      (function type(){
-        if(idx <= fullText.length){
-          typingEl.textContent = fullText.slice(0, idx++);
-          setTimeout(type, speed);
-        }
-      })();
-
-      // Join btn behavior: ask permission & subscribe, then open WA
-      document.getElementById('joinBtn').addEventListener('click', async () => {
-        try {
-          // user gesture; subscribe then open WA
-          await subscribeForHelalink();
-          showToast('Subscribed. Opening WhatsApp...');
-        } catch (err) {
-          console.warn('subscribe failed', err);
-          showToast('Could not subscribe: ' + (err.message || err));
-        } finally {
-          openWhatsApp('Hi! I want to join Helalink early. Please send onboarding steps.');
-        }
-      });
-
-      // Notify (manual browser subscribe)
-      document.getElementById('notifyBtn').addEventListener('click', async () => {
-        try {
-          await subscribeForHelalink();
-          showToast('Subscribed to browser reminders.');
-        } catch (err) {
-          console.error(err);
-          showToast('Could not subscribe: ' + (err.message || err));
-        }
-      });
-
-      // Signal
-      document.getElementById('signalBtn').addEventListener('click', ()=>{
-        openSignal();
-        localStorage.setItem('helalink_signal_sub', 'requested');
-        document.getElementById('subBadge').style.display = 'inline-block';
-        showToast("Opened Signal — send the message to subscribe.");
-      });
-
-      // test push (sends server-side test to all subs)
-      document.getElementById('testPush').addEventListener('click', async () => {
-        try {
-          const r = await fetch('/api/test-notification', { method: 'POST' });
-          const j = await r.json();
-          if (j.success) showToast('Test notification triggered.');
-          else showToast('Test triggered, server responded.');
-        } catch (e) {
-          console.error(e);
-          showToast('Failed to trigger test.');
-        }
-      });
-
-      // small unsubscribe via long-press on badge (hidden quick action)
-      const subBadge = document.getElementById('subBadge');
-      if(subBadge){
-        subBadge.addEventListener('contextmenu', (e) => { e.preventDefault(); unsubscribeForHelalink(); });
-      }
-
-      // Bot accordion
-      document.querySelectorAll('.bot-q').forEach(btn=>{
-        btn.addEventListener('click', ()=>{
-          const ans = btn.nextElementSibling;
-          const open = ans.style.display === 'block';
-          document.querySelectorAll('.bot-a').forEach(a=>a.style.display='none');
-          ans.style.display = open ? 'none' : 'block';
-          if(!open) showToast('Tip: Use the WhatsApp buttons inside answers to join quickly');
-        });
-      });
-
-      // bot action buttons (delegate)
-      document.querySelectorAll('.bot-actions').forEach(group=>{
-        group.addEventListener('click', (e)=>{
-          const t = e.target;
-          if(t.matches('[data-wa-message]')){
-            openWhatsApp(decodeURIComponent(t.getAttribute('data-wa-message')));
-          } else if(t.matches('[data-action]')){
-            const a = t.getAttribute('data-action');
-            if(a === 'more') showToast('We match weekly goals with rewards — check updates in WhatsApp.');
-            if(a === 'curriculum') showToast('Curriculum: Basics → Tasks → Scaling → Referral growth.');
-          }
-        });
-      });
+async function unsubscribeForHelalink() {
+  if (!swReg) {
+    await registerServiceWorker();
+    if (!swReg) return;
+  }
+  const existing = await swReg.pushManager.getSubscription();
+  if (!existing) {
+    isSubscribed = false; updateSubBadge(false); showToast('No existing subscription.');
+    return;
+  }
+  try {
+    await existing.unsubscribe();
+  } catch(e){
+    console.warn('Error during unsubscribe:', e);
+  }
+  // inform server (best-effort)
+  try {
+    await fetch('/api/unsubscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: existing.endpoint, id: localStorage.getItem('helalink_sub_id') || undefined })
     });
+  } catch(e){
+    console.warn('Server unsubscribe failed', e);
+  }
+  isSubscribed = false;
+  updateSubBadge(false);
+  showToast('Unsubscribed from browser reminders.');
+}
 
-    /* Small visual / particle helpers already included in your original page.
-       For brevity they remain unchanged if you still prefer them.
-       The important part is that subscribeForHelalink() above matches your server endpoints. */
-  </script>
-<script src="/index.js" defer></script>
+/* ------------------ DOM hooks ------------------ */
+document.addEventListener('DOMContentLoaded', async () => {
+  // register SW early (no await so UI loads fast; registerServiceWorker does retries)
+  registerServiceWorker().catch(()=>{});
+
+  // typing animation
+  const typingEl = document.getElementById('typingText');
+  const fullText = 'HELALINK — coming soon';
+  let idx = 0; const speed = 85;
+  (function type(){
+    if(idx <= fullText.length){
+      typingEl.textContent = fullText.slice(0, idx++);
+      setTimeout(type, speed);
+    }
+  })();
+
+  // Join btn: subscribe then open WA (best-effort)
+  document.getElementById('joinBtn').addEventListener('click', async () => {
+    try {
+      await subscribeForHelalink();
+      showToast('Subscribed. Opening WhatsApp...');
+    } catch (err) {
+      console.warn('subscribe failed', err);
+      showToast('Could not subscribe: ' + (err.message || err));
+    } finally {
+      openWhatsApp('Hi! I want to join Helalink early. Please send onboarding steps.');
+    }
+  });
+
+  // Browser notify button
+  document.getElementById('notifyBtn').addEventListener('click', async () => {
+    try {
+      await subscribeForHelalink();
+      showToast('Subscribed to browser reminders.');
+    } catch (err) {
+      console.error(err);
+      showToast('Could not subscribe: ' + (err.message || err));
+    }
+  });
+
+  // Signal button
+  document.getElementById('signalBtn').addEventListener('click', ()=>{
+    openSignal();
+    localStorage.setItem('helalink_signal_sub', 'requested');
+    document.getElementById('subBadge').style.display = 'inline-block';
+    showToast("Opened Signal — send the message to subscribe.");
+  });
+
+  // test push (server-level test to all subs)
+  document.getElementById('testPush').addEventListener('click', async () => {
+    try {
+      const r = await fetch('/api/test-notification', { method: 'POST' });
+      if(r.ok){
+        const j = await r.json().catch(()=>({}));
+        if(j.success) showToast('Test notification triggered.');
+        else showToast('Test triggered, server responded.');
+      } else {
+        const txt = await r.text().catch(()=> 'server error');
+        showToast('Test failed: ' + txt);
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to trigger test.');
+    }
+  });
+
+  // long-press / contextmenu on badge to unsubscribe (hidden quick action)
+  const subBadge = document.getElementById('subBadge');
+  if(subBadge){
+    subBadge.addEventListener('contextmenu', (e) => { e.preventDefault(); unsubscribeForHelalink(); });
+    // also allow a double-click to unsubscribe (convenience on mobile)
+    subBadge.addEventListener('dblclick', (e) => { unsubscribeForHelalink(); });
+  }
+
+  // Bot accordion
+  document.querySelectorAll('.bot-q').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const ans = btn.nextElementSibling;
+      const open = ans.style.display === 'block';
+      document.querySelectorAll('.bot-a').forEach(a=>a.style.display='none');
+      ans.style.display = open ? 'none' : 'block';
+      if(!open) showToast('Tip: Use the WhatsApp buttons inside answers to join quickly');
+    });
+  });
+
+  // bot action buttons (delegate)
+  document.querySelectorAll('.bot-actions').forEach(group=>{
+    group.addEventListener('click', (e)=>{
+      const t = e.target;
+      if(t.matches('[data-wa-message]')){
+        openWhatsApp(decodeURIComponent(t.getAttribute('data-wa-message')));
+      } else if(t.matches('[data-action]')){
+        const a = t.getAttribute('data-action');
+        if(a === 'more') showToast('We match weekly goals with rewards — check updates in WhatsApp.');
+        if(a === 'curriculum') showToast('Curriculum: Basics → Tasks → Scaling → Referral growth.');
+      }
+    });
+  });
+
+  // update UI from existing subscription if present
+  try {
+    if(navigator.serviceWorker){
+      const r = await navigator.serviceWorker.getRegistration();
+      const sub = r ? await r.pushManager.getSubscription() : null;
+      if(sub) {
+        isSubscribed = true; updateSubBadge(true);
+      }
+    }
+  } catch(e){ console.warn('Error checking subscription state', e); }
+});
+</script>
 </body>
 </html>
