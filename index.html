@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Helalink — Launching Sept 13</title>
-  <meta name="description" content="Helalink — Unlock real online earning methods. Launching Sept 13. Allow reminders for priority onboarding & launch bonuses.">
+  <title>Helalink — Unlock real online earning methods</title>
+  <meta name="description" content="Helalink — Unlock real online earning methods. Allow reminders for priority onboarding & launch bonuses.">
   <style>
     :root{
       --bg-1:#050515; --bg-2:#0a0f2a; --glass:rgba(255,255,255,0.06);
@@ -96,19 +96,61 @@
 
     /* small toast */
     .toast{position:fixed;right:18px;bottom:18px;background:linear-gradient(90deg,#0b122e,rgba(11,18,46,0.6));padding:12px 16px;border-radius:12px;color:#fff;box-shadow:0 12px 30px rgba(6,7,12,0.6);display:none}
+  </style>
 
-(hero file continues...)
-<!-- Remaining part of the original HTML (bots, footer and scripts) -->
+  <!-- Remaining part of the original HTML (bots, footer and scripts) -->
+</head>
+<body>
+  <div class="page">
+    <main class="hero">
+      <canvas id="bgCanvas" aria-hidden="true"></canvas>
+      <div class="hero-content">
+        <div class="eyebrow">Helalink</div>
+        <h1 class="big-header">Unlock real online earning methods</h1>
+        <div class="lead">Join our community to learn, earn, and access early bonuses. Allow reminders for priority onboarding and exclusive alerts.</div>
 
+        <div class="meta">
+          <div class="cta-wrap">
+            <button class="btn btn-join" id="joinNowBtn">Join Waitlist</button>
+            <button class="btn btn-join" id="learnMoreBtn">Learn More</button>
+          </div>
+        </div>
+
+        <div style="margin-top:28px" class="countdown" aria-hidden="true">
+          <!-- optional: dynamic countdown can be added by client JS if desired -->
+        </div>
+      </div>
+
+      <aside class="panel" aria-hidden="false">
+        <div class="logo-wrap" role="img" aria-label="Helalink logo">
+          <svg class="logo-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <linearGradient id="g" x1="0" x2="1">
+                <stop offset="0" stop-color="#ff0057"/>
+                <stop offset="0.3" stop-color="#ffd400"/>
+                <stop offset="0.6" stop-color="#00c6ff"/>
+                <stop offset="1" stop-color="#9b6bff"/>
+              </linearGradient>
+            </defs>
+            <circle cx="100" cy="100" r="90" fill="url(#g)"/>
+            <text x="50%" y="54%" text-anchor="middle" font-family="Inter, sans-serif" font-size="20" font-weight="900" fill="#041229">HELALINK</text>
+          </svg>
+          <div class="logo-center">
+            <div class="logo-title">HELALINK</div>
+            <div class="logo-sub">Earn • Learn • Grow</div>
+          </div>
+        </div>
+      </aside>
+    </main>
 
     <!-- Notification Section: Browser + Signal subscribe -->
-    <section class="notify" role="region" aria-label="Launch reminders">
+    <section class="notify" role="region" aria-label="Reminders">
       <div class="notify-box">
         <span class="emoji" aria-hidden="true">👉</span>
       </div>
       <div class="notify-cta">
-        <div class="notify-caption"><strong>Get daily launch reminders + bonus alerts — choose Signal or browser.</strong></div>
-        <div class="notify-small">We’ll nudge you every day until launch and remind you about activation so you don’t miss priority bonuses.</div>
+        <div class="notify-caption"><strong>Get daily reminders & bonus alerts — choose Signal or browser.</strong></div>
+        <div class="notify-small">We’ll nudge you every day with priority onboarding & bonus alerts.</div>
       </div>
       <div style="margin-left:18px;display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
         <button id="notifyBtn" type="button" class="btn btn-join pulse" aria-label="Allow browser reminders">Browser Reminders</button>
@@ -162,7 +204,7 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <footer>© 2025 Helalink • Launching September 13 • Early access via WhatsApp & Signal</footer>
+    <footer>© 2025 Helalink • Early access via WhatsApp & Signal</footer>
   </div>
 
   <script src="/index.js" defer></script>
